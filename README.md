@@ -1,11 +1,11 @@
 # markdown_parse
 
-markdown_parse - Markdown to HTML converter.
+markdown_parse: Minimal Markdown to HTML converter.
 
-Zero-dependency, single-file Python CLI.
+Single-file, zero-dependency Python CLI.
 
 ## Usage
 
 ```bash
-python3 markdown_parse.py
+python3 markdown_parse.py test
 ```
