@@ -1,91 +1,79 @@
 #!/usr/bin/env python3
-"""markdown_parse: Minimal Markdown to HTML converter."""
-import re, sys
+"""markdown_parse - Markdown to HTML converter."""
+import sys, re
 
-def convert(text):
+def markdown_to_html(text):
     lines = text.split("\n")
     html = []
-    in_list = False
     in_code = False
+    in_list = False
     for line in lines:
-        # Code blocks
-        if line.strip().startswith("```"):
+        if line.startswith("```"):
             if in_code:
-                html.append("</code></pre>"); in_code = False
+                html.append("</code></pre>")
             else:
-                html.append("<pre><code>"); in_code = True
+                html.append("<pre><code>")
+            in_code = not in_code
             continue
         if in_code:
-            html.append(line); continue
-        # Close list if needed
-        if in_list and not line.strip().startswith(("- ", "* ", "1.")):
-            html.append("</ul>"); in_list = False
-        # Headers
-        m = re.match(r"^(#{1,6})\s+(.+)$", line)
-        if m:
-            level = len(m.group(1))
-            html.append(f"<h{level}>{inline(m.group(2))}</h{level}>")
+            html.append(_escape(line))
             continue
-        # Horizontal rule
-        if re.match(r"^[-*_]{3,}$", line.strip()):
-            html.append("<hr>"); continue
-        # Unordered list
-        m = re.match(r"^\s*[-*]\s+(.+)$", line)
-        if m:
+        if re.match(r"^#{1,6} ", line):
+            level = len(line.split(" ")[0])
+            content = line[level + 1:]
+            html.append(f"<h{level}>{_inline(content)}</h{level}>")
+            continue
+        if line.startswith("- ") or line.startswith("* "):
             if not in_list:
-                html.append("<ul>"); in_list = True
-            html.append(f"<li>{inline(m.group(1))}</li>")
+                html.append("<ul>")
+                in_list = True
+            html.append(f"<li>{_inline(line[2:])}</li>")
             continue
-        # Blockquote
-        m = re.match(r"^>\s*(.*)$", line)
-        if m:
-            html.append(f"<blockquote>{inline(m.group(1))}</blockquote>")
-            continue
-        # Paragraph
-        if line.strip():
-            html.append(f"<p>{inline(line)}</p>")
-    if in_list: html.append("</ul>")
-    if in_code: html.append("</code></pre>")
+        if in_list:
+            html.append("</ul>")
+            in_list = False
+        if line.startswith("> "):
+            html.append(f"<blockquote>{_inline(line[2:])}</blockquote>")
+        elif line.startswith("---") or line.startswith("***"):
+            html.append("<hr/>")
+        elif line.strip():
+            html.append(f"<p>{_inline(line)}</p>")
+    if in_list:
+        html.append("</ul>")
     return "\n".join(html)
 
-def inline(text):
-    # Bold
-    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-    text = re.sub(r"__(.+?)__", r"<strong>\1</strong>", text)
-    # Italic
-    text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
-    text = re.sub(r"_(.+?)_", r"<em>\1</em>", text)
-    # Code
-    text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
-    # Links
-    text = re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2">\1</a>', text)
-    # Images
-    text = re.sub(r"!\[(.+?)\]\((.+?)\)", r'<img src="\2" alt="\1">', text)
+def _escape(text):
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+def _inline(text):
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    text = re.sub(r'`(.+?)`', r'<code>\1</code>', text)
+    text = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2">\1</a>', text)
+    text = re.sub(r'!\[(.+?)\]\((.+?)\)', r'<img alt="\1" src="\2"/>', text)
     return text
 
 def test():
-    assert "<h1>Hello</h1>" in convert("# Hello")
-    assert "<h2>World</h2>" in convert("## World")
-    assert "<strong>bold</strong>" in convert("**bold**")
-    assert "<em>italic</em>" in convert("*italic*")
-    assert "<code>code</code>" in convert("`code`")
-    assert '<a href="http://x">link</a>' in convert("[link](http://x)")
-    # Lists
-    md = "- item1\n- item2"
-    html = convert(md)
-    assert "<ul>" in html
-    assert "<li>item1</li>" in html
-    # Code block
-    md2 = "```\nprint('hi')\n```"
-    html2 = convert(md2)
-    assert "<pre><code>" in html2
-    assert "print('hi')" in html2
-    # HR
-    assert "<hr>" in convert("---")
-    # Blockquote
-    assert "<blockquote>" in convert("> quote")
+    assert "<h1>Hello</h1>" in markdown_to_html("# Hello")
+    assert "<h3>Sub</h3>" in markdown_to_html("### Sub")
+    r = markdown_to_html("**bold** and *italic*")
+    assert "<strong>bold</strong>" in r
+    assert "<em>italic</em>" in r
+    r2 = markdown_to_html("`code`")
+    assert "<code>code</code>" in r2
+    r3 = markdown_to_html("[link](http://example.com)")
+    assert '<a href="http://example.com">link</a>' in r3
+    r4 = markdown_to_html("- item1\n- item2")
+    assert "<ul>" in r4
+    assert "<li>item1</li>" in r4
+    r5 = markdown_to_html("> quote")
+    assert "<blockquote>quote</blockquote>" in r5
+    r6 = markdown_to_html("---")
+    assert "<hr/>" in r6
+    r7 = markdown_to_html("```\ncode here\n```")
+    assert "<pre><code>" in r7
+    assert "code here" in r7
     print("All tests passed!")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "test": test()
-    else: print("Usage: markdown_parse.py test")
+    test() if "--test" in sys.argv else print("markdown_parse: Markdown converter. Use --test")
